@@ -1,0 +1,98 @@
+-- @nsURI ECO=http://www.eclipse.org/emf/2002/Ecore
+-- @nsURI UML=http://www.eclipse.org/uml2/4.0.0/UML
+
+module uml2ecore;
+create OUT : ECO from IN : UML;
+
+rule Model2Package{
+	from m : UML!Model
+	to p : ECO!EPackage(
+		eClassifiers <- m.allOwnedElements() -> select(e | (not e.oclIsKindOf(UML!EnumerationLiteral)) and (not e.oclIsKindOf(UML!Property)) and (not e.oclIsKindOf(UML!LiteralInteger)) and (not e.oclIsKindOf(UML!LiteralUnlimitedNatural)) and (not e.oclIsKindOf(UML!Association)) and (not e.oclIsKindOf(UML!PackageImport))),
+		name <- m.name,
+		nsURI <- 'http://www.unicamp.br/syspos/customized'.concat(m.name),
+		nsPrefix <- m.name
+	)
+}
+
+rule Class2EClass{
+	from cl : UML!Class(
+		cl.name = 'CustomizedSystem' and not cl.oclIsKindOf(UML!Association)
+	)
+	to ec : ECO!EClass(
+		name <- cl.name,
+		eAttributes <- cl.attribute -> select(pr | pr.type.oclIsKindOf(UML!PrimitiveType) and not pr.type.oclIsKindOf(UML!Enumeration)),		
+		eReferences <- cl.attribute -> select(pr | (not pr.type.oclIsKindOf(UML!PrimitiveType) or pr.type.oclIsKindOf(UML!Enumeration)) and not pr.owner.oclIsKindOf(UML!Association))
+	)
+}
+
+rule Class2EClassAbstract{
+	from cl : UML!Class(
+		cl.name <> 'CustomizedSystem' and not cl.oclIsKindOf(UML!Association) and not cl.owner.oclIsKindOf(UML!Model)
+	)
+	to ec : ECO!EClass(
+		name <- cl.name,
+		eAttributes <- cl.attribute -> select(pr | pr.type.oclIsKindOf(UML!PrimitiveType) or pr.type.oclIsKindOf(UML!Enumeration)),		
+		eReferences <- cl.attribute -> select(pr | not(pr.type.oclIsKindOf(UML!PrimitiveType) or pr.type.oclIsKindOf(UML!Enumeration)))
+	)
+}
+
+rule Property2EAttributeForeign{
+	from pr : UML!Property(
+		not pr.type.oclIsKindOf(UML!PrimitiveType) and not pr.owner.oclIsKindOf(UML!Model) and not pr.owner.oclIsKindOf(UML!Association) and not pr.type.oclIsKindOf(UML!Enumeration)
+	)
+	to ea : ECO!EReference(
+		name <- pr.name,
+		eType <- pr.type,
+		lowerBound <- pr.lower,
+		upperBound <- pr.upper,
+		containment <- true
+	)
+}
+
+rule Property2EAttributeNormal{
+	from pr : UML!Property(
+		pr.type.oclIsKindOf(UML!PrimitiveType) and not pr.owner.oclIsKindOf(UML!Model) and not pr.owner.oclIsKindOf(UML!Association) and not pr.type.oclIsKindOf(UML!Enumeration)
+	)
+	to ea : ECO!EAttribute(
+		name <- pr.name,
+		eType <- ECO!EDataType.allInstances() -> select(dt | dt.name = pr.type.name) -> first(),
+		lowerBound <- pr.lower,
+		upperBound <- pr.upper
+	)
+}
+
+rule Property2EAttributeEnum{
+	from pr : UML!Property(
+		not pr.type.oclIsKindOf(UML!PrimitiveType) and not pr.owner.oclIsKindOf(UML!Model) and not pr.owner.oclIsKindOf(UML!Association) and pr.type.oclIsKindOf(UML!Enumeration)
+	)
+	to ea : ECO!EAttribute(
+		name <- pr.name,
+		eType <- pr.type,
+		lowerBound <- pr.lower,
+		upperBound <- pr.upper
+	)
+}
+
+rule Enum2Enum{
+	from en : UML!Enumeration
+	to ee : ECO!EEnum(
+		name <- en.name,
+		eLiterals <- en.ownedLiteral
+	)
+}
+
+rule Literal2Literal{
+	from ul : UML!EnumerationLiteral
+	to el : ECO!EEnumLiteral(
+		literal <- ul.name,
+		name <- ul.name,
+		value <- ul.enumeration.ownedLiteral.indexOf(ul) - 1
+	)
+}
+
+rule Type2Type{
+	from ut : UML!PrimitiveType
+	to et : ECO!EDataType(
+		name <- ut.name
+	)
+}
